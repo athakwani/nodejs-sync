@@ -1,0 +1,204 @@
+{
+  ports: 
+  [
+    "9418:9418",    // sync daemon
+    "2222:22",      // ssh
+    "8080:8080",    // node-inspector
+    "3000:3000"     // default expressjs port
+  ],  
+  env:
+  [
+    "NODE_ENV=development",
+    "PORT=3000"
+  ],
+  dependencies: 
+  [
+    {
+      name: "linux-dependencies",
+      cmd:
+      '''
+        apt-get install -y curl sudo inotify-tools openssh-server jq wget daemon mongodb
+        curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
+        apt-get -y install nodejs 
+      '''
+    },
+    {
+      name: "hub",
+      cmd:
+      '''
+        cd tmp
+        wget https://github.com/github/hub/releases/download/v2.3.0-pre8/hub-linux-amd64-2.3.0-pre8.tgz
+        tar -xvzf hub-linux-amd64-2.3.0-pre8.tgz 
+        cp ./hub-linux-amd64-2.3.0-pre8/bin/hub /usr/local/bin/        
+      '''
+    },
+    {
+      name: "sync",
+      cmd:
+      '''
+        curl -sSL https://get.dupper.co/dev/index | sh
+      '''
+    },     
+    {
+      name: "nodejs-dependencies",
+      cmd:
+      '''
+        npm install -g bower gulp node-inspector
+        cd $REPO_ROOT
+        npm install
+      ''',
+      watch: "package.json"
+    }
+  ],
+  commands: {
+    sync: [{
+        server:
+        '''
+          if [ ! -f $HOME/.ssh/devenv ]
+          then
+            mkdir -p $HOME/.ssh
+            ssh-keygen -q -t rsa -N "" -f "$HOME/.ssh/devenv"
+            cat "$HOME/.ssh/devenv.pub" >> $HOME/.ssh/authorized_keys
+          fi
+         
+          PRIVATEKEY="$(cat $HOME/.ssh/devenv)"
+          _export PRIVATEKEY
+
+          # Remove all occurances of .gut & .gutignore
+          sed -i 's/^.gut$//g'  .gitignore
+          sed -i 's/^.gutignore$//g'  .gitignore
+          # Remove trailing blank lines
+          sed -i -e :a -e '/^\n*$/{$d;N;};/\n$/ba' .gitignore       
+
+          # Copy .gitignore to .gutignore to avoid syncing to client.
+          cp $REPO_ROOT/.gitignore $REPO_ROOT/.gutignore
+
+          # Now add .gut & .gutignore to .gitignore
+          echo ".gut" >> $REPO_ROOT/.gitignore 
+          echo ".gutignore" >> $REPO_ROOT/.gitignore 
+
+          ulimit -n 9999
+        
+          service ssh status > /dev/null 2>&1
+          if [[ $? -ne 0 ]]
+          then
+            service ssh start
+          fi
+        '''
+      },{
+        client:
+        '''
+          _verbose=0
+          _path=""
+          
+          while [ "$#" -gt 0 ]
+          do
+            opt="$1"
+            shift
+            case "$opt" in
+              --verbose|-v)
+                _verbose=1
+                ;;
+              *)
+                if [[ -z $_path ]]
+                then
+                  _path="$opt"
+                fi
+                ;;
+            esac
+          done          
+                    
+          if [[ $_path == "" ]]
+          then
+            echo "Usage: dupper exec $REPO_NAME devenv [--verbose | -v] PATH"
+            exit 1
+          fi
+
+          set +e
+          command -v "dev" > /dev/null 2>&1
+          if [[ $? -ne 0 ]]; then
+            curl -sSL https://get.dupper.co/dev/index | sudo sh
+          fi
+          
+          mkdir -p $HOME/.ssh
+          echo "$PRIVATEKEY" > $HOME/.ssh/devenv
+          
+          mkdir -p $_path
+          ulimit -n 9999
+          dev sync $([[ $_verbose -eq 1 ]] && echo "-v") -i $HOME/.ssh/devenv root@$SERVER_IP:2222:$REPO_ROOT $_path
+        '''
+    }],   
+    save: [{
+      server:
+      '''
+        set -e
+        cd $REPO_ROOT
+        local _new=0
+
+        # Argument handling
+        while [ "$#" -gt 0 ]
+        do
+        opt="$1"
+        shift
+        case "$opt" in
+          --new|-n)
+            _new=1
+            ;;
+        esac
+        done          
+        
+        if [[ $_new == 1 ]]; then
+            printf "New github repository name: "
+            read GITHUB_REPO
+            export GITHUB_REPO
+
+            printf "Username for 'https://github.com': "
+            read GITHUB_USER
+            export GITHUB_USER
+
+            printf "Password for 'https://$GITHUB_USER@github.com':"
+            read -s GITHUB_PASSWORD
+            export  GITHUB_PASSWORD
+            printf "\n"
+            
+            user_json="$(curl -sSL -u $GITHUB_USER:$GITHUB_PASSWORD https://api.github.com/user | jq .)"
+            set +e
+            git config --global --unset-all user.email
+            git config --global --unset-all user.name
+            set -e
+            git config --global user.email "$(echo "$user_json" | jq -r .email)"
+            git config --global user.name "$(echo "$user_json" | jq -r .name)"
+
+            local repo_name=$(basename "${REPO_URL%.git}" | tr '[:upper:]' '[:lower:]')
+            local repo_user=$(basename $(dirname "${REPO_URL%.git}") | tr '[:upper:]' '[:lower:]')
+  
+            description="$(curl -sSL https://api.github.com/repos/$repo_user/$repo_name | jq .description)"
+
+            hub create -d "$description" $GITHUB_REPO
+            hub remote set-url origin https://github.com/$GITHUB_USER/$GITHUB_REPO.git
+            echo "https://${GITHUB_USER}:${GITHUB_PASSWORD}@github.com/$GITHUB_USER/$GITHUB_REPO.git" > ~/.git-credentials
+        fi
+
+        set +e
+        email=$(git config --global user.email)
+        if [[ $email == "" ]]; then
+            printf "Email for git commit: "
+            read GIT_EMAIL
+            git config --global user.email "$GIT_EMAIL"
+        fi
+
+        name=$(git config --global user.name)
+        if [[ $name == "" ]]; then
+            printf "Name for git commit: "
+            read GIT_NAME
+            git config --global user.name "$GIT_NAME"
+        fi
+
+        hub add -A
+        hub commit
+        set -e
+        hub push origin master
+      '''
+    }]
+  }
+}
