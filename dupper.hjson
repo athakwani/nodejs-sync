@@ -54,14 +54,14 @@
     sync: [{
         server:
         '''
-          if [ ! -f $HOME/.ssh/devenv ]
+          if [ ! -f $HOME/.ssh/sync ]
           then
             mkdir -p $HOME/.ssh
-            ssh-keygen -q -t rsa -N "" -f "$HOME/.ssh/devenv"
-            cat "$HOME/.ssh/devenv.pub" >> $HOME/.ssh/authorized_keys
+            ssh-keygen -q -t rsa -N "" -f "$HOME/.ssh/sync"
+            cat "$HOME/.ssh/sync.pub" >> $HOME/.ssh/authorized_keys
           fi
          
-          PRIVATEKEY="$(cat $HOME/.ssh/devenv)"
+          PRIVATEKEY="$(cat $HOME/.ssh/sync)"
           _export PRIVATEKEY
 
           # Remove all occurances of .gut & .gutignore
@@ -110,7 +110,7 @@
                     
           if [[ $_path == "" ]]
           then
-            echo "Usage: dupper exec $REPO_NAME devenv [--verbose | -v] PATH"
+            echo "Usage: dupper exec -t $REPO_NAME sync [--verbose | -v] PATH"
             exit 1
           fi
 
@@ -121,11 +121,11 @@
           fi
           
           mkdir -p $HOME/.ssh
-          echo "$PRIVATEKEY" > $HOME/.ssh/devenv
+          echo "$PRIVATEKEY" > $HOME/.ssh/sync
           
           mkdir -p $_path
           ulimit -n 9999
-          dev sync $([[ $_verbose -eq 1 ]] && echo "-v") -i $HOME/.ssh/devenv root@$SERVER_IP:2222:$REPO_ROOT $_path
+          dev sync $([[ $_verbose -eq 1 ]] && echo "-v") -i $HOME/.ssh/sync root@$SERVER_IP:2222:$REPO_ROOT $_path
         '''
     }],   
     save: [{
