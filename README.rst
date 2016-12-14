@@ -8,7 +8,6 @@ This template install nodejs dependencies and implements sync command that start
 .. code-block:: bash
 
   dupper dup -t --name=myrepo --template-from=https://github.com/athakwani/nodejs-sync GITURL
-  dupper exec -t myrepo sync DIR
       
 Commands
 ========
@@ -18,5 +17,5 @@ Commands
 .. code-block:: bash
 
     Usage:
-    dupper exec -t CONTAINER sync DIR
+    dupper exec -t myrepo sync DIR
     
