@@ -148,6 +148,8 @@
         esac
         done          
                 
+        _CONFIGFILE="$HOME/.sync"
+                
         if [[ $(git config remote.origin.forked) == "" ]]; then
             printf "Username for 'https://github.com': "
             read GITHUB_USER
@@ -177,8 +179,6 @@
             git config remote.origin.forked 1
         fi
         
-        _CONFIGFILE="~/.sync"
-
         [ -f $_CONFIGFILE ] && GITHUB_USER=$(source $_CONFIGFILE; echo $GITHUB_USER)
 
         if [[ -z $GITHUB_USER ]]
@@ -193,13 +193,17 @@
         fi
                 
         set +e
-        hub checkout -b $_BRANCH
         hub add -A
         hub commit
         set -e
         
         hub push $GITHUB_USER $_BRANCH
-        hub pull-request
+
+        if [[ $(git config remote.origin.pr-created) == "" ]]; then
+            hub checkout -b $_BRANCH
+            hub pull-request
+            git config remote.origin.pr-created 1
+        fi
       '''
     }]
   }
