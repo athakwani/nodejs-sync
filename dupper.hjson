@@ -132,22 +132,7 @@
       server:
       '''
         set -e
-        cd $REPO_ROOT
-        local _BRANCH=""
-
-        # Argument handling
-        while [ "$#" -gt 0 ]
-        do
-        opt="$1"
-        shift
-        case "$opt" in
-          --branch|-b)
-            _BRANCH="$1"
-            shift
-            ;;
-        esac
-        done          
-                
+        cd $REPO_ROOT                
         _CONFIGFILE="$HOME/.sync"
                 
         if [[ $(git config remote.origin.forked) == "" ]]; then
@@ -189,7 +174,7 @@
         fi
 
         if [[ $_BRANCH == "" ]]; then
-            _BRANCH="${GITHUB_USER}_$RANDOM"
+            _BRANCH="${GITHUB_USER}"
         fi
                 
         set +e
