@@ -147,11 +147,12 @@
             ;;
         esac
         done          
-        
+                
         if [[ $(git config remote.origin.forked) == "" ]]; then
             printf "Username for 'https://github.com': "
             read GITHUB_USER
             export GITHUB_USER
+            echo "GITHUB_USER=$GITHUB_USER" > $_CONFIGFILE
 
             printf "Password for 'https://$GITHUB_USER@github.com':"
             read -s GITHUB_PASSWORD
@@ -169,15 +170,28 @@
             local GITHUB_REPO=$(basename "${REPO_URL%.git}" | tr '[:upper:]' '[:lower:]')
 
             hub fork 
+            hub remote remove $GITHUB_USER
+            hub remote add $GITHUB_USER https://github.com/$GITHUB_USER/$GITHUB_REPO.git
 
             echo "https://${GITHUB_USER}:${GITHUB_PASSWORD}@github.com/$GITHUB_USER/$GITHUB_REPO.git" > ~/.git-credentials
             git config remote.origin.forked 1
         fi
+        
+        _CONFIGFILE="~/.sync"
+
+        [ -f $_CONFIGFILE ] && GITHUB_USER=$(source $_CONFIGFILE; echo $GITHUB_USER)
+
+        if [[ -z $GITHUB_USER ]]
+        then
+            printf "Username for 'https://github.com': "
+            read GITHUB_USER
+            echo "GITHUB_USER=$GITHUB_USER" > $_CONFIGFILE
+        fi
 
         if [[ $_BRANCH == "" ]]; then
-            _BRANCH="${GITHUB_USER}"
+            _BRANCH="${GITHUB_USER}_$RANDOM"
         fi
-        
+                
         set +e
         hub checkout -b $_BRANCH
         hub add -A
