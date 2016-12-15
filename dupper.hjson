@@ -170,11 +170,13 @@
         then
             printf "Username for 'https://github.com': "
             read GITHUB_USER
-            echo "GITHUB_USER=$GITHUB_USER" > $_CONFIGFILE
+            echo "GITHUB_USER=$GITHUB_USER" >> $_CONFIGFILE
         fi
 
+        [ -f $_CONFIGFILE ] && _BRANCH=$(source $_CONFIGFILE; echo $BRANCH)
         if [[ $_BRANCH == "" ]]; then
-            _BRANCH="${GITHUB_USER}"
+            _BRANCH="${GITHUB_USER}_$RANDOM"
+            echo "BRANCH=$_BRANCH" >> $_CONFIGFILE
         fi
                 
         set +e
@@ -182,12 +184,13 @@
         hub commit
         set -e
         
-        hub push $GITHUB_USER $_BRANCH
-
         if [[ $(git config remote.origin.pr-created) == "" ]]; then
             hub checkout -b $_BRANCH
+            hub push $GITHUB_USER $_BRANCH
             hub pull-request
             git config remote.origin.pr-created 1
+        else
+            hub push $GITHUB_USER $_BRANCH
         fi
       '''
     }]
