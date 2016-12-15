@@ -128,12 +128,12 @@
           dev sync $([[ $_verbose -eq 1 ]] && echo "-v") -i $HOME/.ssh/sync root@$SERVER_IP:2222:$REPO_ROOT $_path
         '''
     }],   
-    save: [{
+    pull-request: [{
       server:
       '''
         set -e
         cd $REPO_ROOT
-        local _new=0
+        local _BRANCH=""
 
         # Argument handling
         while [ "$#" -gt 0 ]
@@ -141,17 +141,14 @@
         opt="$1"
         shift
         case "$opt" in
-          --new|-n)
-            _new=1
+          --branch|-b)
+            _BRANCH="$1"
+            shift
             ;;
         esac
         done          
         
-        if [[ $_new == 1 ]]; then
-            printf "New github repository name: "
-            read GITHUB_REPO
-            export GITHUB_REPO
-
+        if [[ $(git config remote.origin.forked) == "" ]]; then
             printf "Username for 'https://github.com': "
             read GITHUB_USER
             export GITHUB_USER
@@ -169,35 +166,26 @@
             git config --global user.email "$(echo "$user_json" | jq -r .email)"
             git config --global user.name "$(echo "$user_json" | jq -r .name)"
 
-            local repo_name=$(basename "${REPO_URL%.git}" | tr '[:upper:]' '[:lower:]')
-            local repo_user=$(basename $(dirname "${REPO_URL%.git}") | tr '[:upper:]' '[:lower:]')
-  
-            description="$(curl -sSL https://api.github.com/repos/$repo_user/$repo_name | jq .description)"
+            local GITHUB_REPO=$(basename "${REPO_URL%.git}" | tr '[:upper:]' '[:lower:]')
 
-            hub create -d "$description" $GITHUB_REPO
-            hub remote set-url origin https://github.com/$GITHUB_USER/$GITHUB_REPO.git
+            hub fork 
+
             echo "https://${GITHUB_USER}:${GITHUB_PASSWORD}@github.com/$GITHUB_USER/$GITHUB_REPO.git" > ~/.git-credentials
+            git config remote.origin.forked 1
         fi
 
+        if [[ $_BRANCH == "" ]]; then
+            _BRANCH="${GITHUB_USER}"
+        fi
+        
         set +e
-        email=$(git config --global user.email)
-        if [[ $email == "" ]]; then
-            printf "Email for git commit: "
-            read GIT_EMAIL
-            git config --global user.email "$GIT_EMAIL"
-        fi
-
-        name=$(git config --global user.name)
-        if [[ $name == "" ]]; then
-            printf "Name for git commit: "
-            read GIT_NAME
-            git config --global user.name "$GIT_NAME"
-        fi
-
+        hub checkout -b $_BRANCH
         hub add -A
         hub commit
         set -e
-        hub push origin master
+        
+        hub push $GITHUB_USER $_BRANCH
+        hub pull-request
       '''
     }]
   }
